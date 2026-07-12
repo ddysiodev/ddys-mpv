@@ -1,0 +1,23 @@
+{
+  "name": "ddys-mpv",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DDYS API 的 mpv Lua 播放器脚本",
+  "type": "module",
+  "scripts": {
+    "check": "node tools/check.mjs",
+    "test": "node tests/run.mjs",
+    "package": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-package.ps1"
+  },
+  "keywords": [
+    "ddys",
+    "mpv",
+    "lua",
+    "player",
+    "m3u8"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

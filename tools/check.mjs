@@ -112,8 +112,12 @@ assert(!readme.includes('## **开发打包**'), 'README contains unwanted develo
 const files = await listFiles();
 for (const file of files) {
   const relative = path.relative(root, file).replaceAll(path.sep, '/');
-  assert(!relative.includes('/node_modules/'), `node_modules leaked: ${relative}`);
-  assert(!relative.includes('/package/'), `package dir leaked: ${relative}`);
+  const segments = relative.split('/');
+  assert(!segments.includes('node_modules'), `node_modules leaked: ${relative}`);
+  assert(!segments.includes('package'), `package dir leaked: ${relative}`);
+  assert(!segments.includes('dist'), `dist dir leaked: ${relative}`);
+  assert(!segments.includes('build'), `build dir leaked: ${relative}`);
+  assert(!segments.includes('coverage'), `coverage dir leaked: ${relative}`);
   assert(!/\.(log|tmp|cache|zip|tgz)$/i.test(relative), `generated file leaked: ${relative}`);
   assert(!/(^|\/)\.env($|\.)/i.test(relative), `env file leaked: ${relative}`);
 }

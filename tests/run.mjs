@@ -27,6 +27,7 @@ test('Lua navigation keys are temporary', async () => {
   assert.match(lua, /function unbind_navigation\(\)/u);
   assert.match(lua, /mp\.remove_key_binding/u);
   assert.match(lua, /state\.menu_open = false/u);
+  assert.match(lua, /if state\.menu_open and state\.mode ~= "" then/u);
   assert.equal((lua.match(/mp\.add_forced_key_binding/g) || []).length, 5);
 });
 
@@ -37,7 +38,22 @@ test('Lua parser handles broad DDYS API shapes', async () => {
     '"src", "file", "play_url"',
     '"items", "resources", "episodes", "playlist", "play", "urls"',
     'meta.total_pages or meta.totalPages or meta.last_page or meta.lastPage or meta.pages',
-    'Authorization: Bearer'
+    'Authorization: Bearer',
+    'local grouped = false',
+    'seen[resource.url]'
+  ]) {
+    assert.ok(lua.includes(fragment), `missing ${fragment}`);
+  }
+});
+
+test('Lua guards export and playback edge cases', async () => {
+  const lua = await readFile('scripts/ddys-mpv.lua', 'utf8');
+  for (const fragment of [
+    'safe_file_stem',
+    'single_line(resource.url)',
+    'pcall(mp.commandv, "loadfile", resource.url, "replace")',
+    'opt.http_timeout = clamp_number(opt.http_timeout, 15, 3, 120)',
+    'DDYS API returned empty or invalid JSON'
   ]) {
     assert.ok(lua.includes(fragment), `missing ${fragment}`);
   }

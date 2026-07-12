@@ -12,5 +12,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - run: sudo apt-get update && sudo apt-get install -y lua5.4
+      - run: luac5.4 -p scripts/ddys-mpv.lua
       - run: node tools/check.mjs
       - run: node tests/run.mjs

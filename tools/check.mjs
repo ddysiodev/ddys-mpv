@@ -59,13 +59,13 @@ for (const file of required) {
 
 const pkg = JSON.parse(await read('package.json'));
 assert(pkg.name === 'ddys-mpv', 'package name mismatch.');
-assert(pkg.version === '0.1.0', 'package version mismatch.');
+assert(pkg.version === '0.1.1', 'package version mismatch.');
 assert(pkg.private === true, 'package must be private.');
 assert(pkg.type === 'module', 'package must use ESM.');
 
 const lua = await read('scripts/ddys-mpv.lua');
 for (const fragment of [
-  'mp.commandv("loadfile", resource.url, "replace")',
+  'pcall(mp.commandv, "loadfile", resource.url, "replace")',
   'mp.osd_message',
   'mp.add_key_binding',
   'mp.add_forced_key_binding',
@@ -73,7 +73,17 @@ for (const fragment of [
   'mp.command_native',
   'utils.parse_json',
   'options.read_options',
+  'local VERSION = "0.1.1"',
+  'opt.http_timeout = clamp_number(opt.http_timeout, 15, 3, 120)',
   'ddys-mpv-search',
+  'table.concat({ ... }, " ")',
+  'pcall(mp.command',
+  'DDYS API returned empty or invalid JSON',
+  'safe_file_stem',
+  'single_line(resource.url)',
+  'if state.menu_open and state.mode ~= "" then',
+  'local grouped = false',
+  'seen[resource.url]',
   'flatten_sources',
   'export_playlist',
   'load_history',

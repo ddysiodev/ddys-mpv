@@ -2,6 +2,8 @@ local mp = require("mp")
 local utils = require("mp.utils")
 local options = require("mp.options")
 
+local VERSION = "0.1.1"
+
 local opt = {
     api_base = "https://ddys.io/api/v1",
     site_base = "https://ddys.io",
@@ -55,6 +57,20 @@ local function trim(value)
     return tostring(value or ""):gsub("^%s+", ""):gsub("%s+$", "")
 end
 
+local function single_line(value)
+    return trim(value):gsub("[\r\n]+", " "):gsub("%s%s+", " ")
+end
+
+local function safe_file_stem(value)
+    local text = single_line(value)
+    if text == "" then text = "ddys" end
+    text = text:gsub("[\\/:*?\"<>|%c]", "_")
+    text = text:gsub("^%.*", ""):gsub("%.*$", "")
+    if text == "" then text = "ddys" end
+    if #text > 120 then text = text:sub(1, 120) end
+    return text
+end
+
 local function clamp_number(value, fallback, min_value, max_value)
     local number = tonumber(value) or fallback
     if number < min_value then return min_value end
@@ -67,6 +83,7 @@ opt.home_limit = clamp_number(opt.home_limit, 24, 1, 100)
 opt.menu_rows = clamp_number(opt.menu_rows, 12, 5, 30)
 opt.history_limit = clamp_number(opt.history_limit, 80, 10, 500)
 opt.osd_seconds = clamp_number(opt.osd_seconds, 8, 2, 60)
+opt.http_timeout = clamp_number(opt.http_timeout, 15, 3, 120)
 
 local function join_url(base, path)
     base = trim(base):gsub("/+$", "")
@@ -100,6 +117,8 @@ end
 
 local function script_dir()
     if opt.data_dir and trim(opt.data_dir) ~= "" then
+        local ok, expanded = pcall(mp.command_native, {"expand-path", trim(opt.data_dir)})
+        if ok and type(expanded) == "string" and expanded ~= "" then return expanded end
         return trim(opt.data_dir)
     end
     return mp.command_native({"expand-path", "~~/"})
@@ -216,7 +235,7 @@ local function http_json(path, query)
         "-fsSL",
         "--max-time", tostring(opt.http_timeout),
         "-H", "Accept: application/json",
-        "-H", "User-Agent: ddys-mpv/0.1.0",
+        "-H", "User-Agent: ddys-mpv/" .. VERSION,
     }
     if trim(opt.api_key) ~= "" then
         table.insert(args, "-H")
@@ -236,6 +255,9 @@ local function http_json(path, query)
         error(trim(err) ~= "" and err or "request failed")
     end
     local root = utils.parse_json(result.stdout or "{}")
+    if root == nil then
+        error("DDYS API returned empty or invalid JSON")
+    end
     if type(root) == "table" and root.success == false then
         error(first_value(root, { "message", "error", "msg" }) ~= "" and first_value(root, { "message", "error", "msg" }) or "DDYS API failed")
     end
@@ -334,22 +356,40 @@ end
 local function flatten_sources(data)
     data = data_node(data)
     local resources = {}
+    local seen = {}
+    local function add_resource(resource)
+        if resource and resource.url ~= "" and not seen[resource.url] then
+            seen[resource.url] = true
+            table.insert(resources, resource)
+        end
+    end
     local function add_group(group_name, values, group_index)
         local index = 1
         for _, item in ipairs(values) do
             local resource = read_resource(item, index, group_name, group_index)
-            if resource and resource.url ~= "" then table.insert(resources, resource) end
+            add_resource(resource)
             index = index + 1
         end
     end
 
     if type(data) ~= "table" then return resources end
     if #data > 0 then
-        if has_resource_array(data[1]) then
+        local grouped = false
+        for _, group in ipairs(data) do
+            if has_resource_array(group) then
+                grouped = true
+                break
+            end
+        end
+        if grouped then
             for group_index, group in ipairs(data) do
-                local name = first_value(group, { "name", "title", "label", "source", "type" })
-                if name == "" then name = "线路 " .. group_index end
-                add_group(name, collect_arrays(group), group_index)
+                if has_resource_array(group) then
+                    local name = first_value(group, { "name", "title", "label", "source", "type" })
+                    if name == "" then name = "线路 " .. group_index end
+                    add_group(name, collect_arrays(group), group_index)
+                else
+                    add_resource(read_resource(group, group_index, "Online", group_index))
+                end
             end
         else
             add_group("Online", array_from(data), 1)
@@ -369,7 +409,7 @@ end
 
 local function resource_score(resource)
     local text = (resource.name .. " " .. resource.url):lower()
-    local score = resource.direct and 100 or 0
+    local score = (resource.direct and opt.prefer_direct) and 100 or 0
     local weight = 20
     for keyword in string.gmatch(opt.prefer_keywords or "", "([^,]+)") do
         keyword = trim(keyword):lower()
@@ -430,7 +470,11 @@ local function play_resource(resource, movie)
         notify("没有可播放链接")
         return
     end
-    mp.commandv("loadfile", resource.url, "replace")
+    local ok, err = pcall(mp.commandv, "loadfile", resource.url, "replace")
+    if not ok then
+        notify(err or "播放失败")
+        return
+    end
     state.menu_open = false
     if unbind_navigation then unbind_navigation() end
     remember(movie or state.current_movie or {}, resource)
@@ -539,7 +583,7 @@ end
 
 local function export_playlist(kind, movie, resources)
     local dir = ensure_data_dir()
-    local slug = movie.slug ~= "" and movie.slug or "ddys"
+    local slug = safe_file_stem(movie.slug ~= "" and movie.slug or movie.title or "ddys")
     local ext = kind == "pls" and "pls" or "m3u"
     local path = utils.join_path(dir, slug .. "." .. ext)
     local file = io.open(path, "w")
@@ -551,15 +595,15 @@ local function export_playlist(kind, movie, resources)
         file:write("[playlist]\n")
         file:write("NumberOfEntries=" .. tostring(#resources) .. "\n")
         for index, resource in ipairs(resources) do
-            file:write("File" .. index .. "=" .. resource.url .. "\n")
-            file:write("Title" .. index .. "=" .. movie.title .. " - " .. resource.name .. "\n")
+            file:write("File" .. index .. "=" .. single_line(resource.url) .. "\n")
+            file:write("Title" .. index .. "=" .. single_line(movie.title .. " - " .. resource.name) .. "\n")
         end
         file:write("Version=2\n")
     else
         file:write("#EXTM3U\n")
         for _, resource in ipairs(resources) do
-            file:write("#EXTINF:-1," .. movie.title .. " - " .. resource.name .. "\n")
-            file:write(resource.url .. "\n")
+            file:write("#EXTINF:-1," .. single_line(movie.title .. " - " .. resource.name) .. "\n")
+            file:write(single_line(resource.url) .. "\n")
         end
     end
     file:close()
@@ -600,8 +644,12 @@ local function favorites_menu()
 end
 
 local function prompt_search()
-    mp.command("script-message-to console type \"script-message ddys-mpv-search \"")
-    notify("在控制台输入关键词后回车")
+    local ok = pcall(mp.command, "script-message-to console type \"script-message ddys-mpv-search \"")
+    if ok then
+        notify("在控制台输入关键词后回车")
+    else
+        notify("请在 mpv 控制台执行: script-message ddys-mpv-search 关键词")
+    end
 end
 
 local function open_item(item)
@@ -661,7 +709,8 @@ local function open_latest()
     movies_menu(source_defs[1], 1, "")
 end
 
-local function perform_search(query)
+local function perform_search(...)
+    local query = table.concat({ ... }, " ")
     query = trim(query)
     if query == "" then return notify("搜索关键词为空") end
     movies_menu({ id = "search", label = "搜索" }, 1, query)
@@ -675,7 +724,7 @@ mp.add_key_binding(opt.key_history, "ddys-mpv-history", history_menu)
 mp.add_key_binding(opt.key_favorites, "ddys-mpv-favorites", favorites_menu)
 
 mp.register_event("file-loaded", function()
-    if state.mode ~= "home" and state.mode ~= "" then
+    if state.menu_open and state.mode ~= "" then
         render_menu()
     end
 end)

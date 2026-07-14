@@ -134,7 +134,8 @@ assert(workflow.includes('ddys-mpv-v0.1.1.zip.sha256'), 'workflow artifact must 
 const buildScript = await read('tools/build-package.ps1');
 assert(buildScript.includes('ddys-mpv-v{0}.zip'), 'build script must produce versioned ZIP.');
 assert(buildScript.includes('Get-FileHash'), 'build script must produce SHA-256 checksum.');
-assert(buildScript.includes('Set-Content'), 'build script must write checksum file.');
+assert(buildScript.includes('[System.IO.File]::WriteAllText'), 'build script must write checksum file without implicit newline.');
+assert(buildScript.includes('[System.Text.Encoding]::ASCII'), 'build script must write checksum file with stable ASCII encoding.');
 assert(buildScript.includes('Assert-InRoot'), 'build script must guard paths.');
 assert(buildScript.includes('DdysZipCrc32'), 'build script must compute deterministic ZIP CRC values.');
 assert(buildScript.includes('0x04034b50'), 'build script must write ZIP local file headers explicitly.');

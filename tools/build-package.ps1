@@ -214,7 +214,11 @@ foreach ($path in @($Zip, $ShaFile)) {
 
 $FileCount = New-ZipFromProjectDirectory -Source $Root -Output $Zip
 $Hash = (Get-FileHash -LiteralPath $Zip -Algorithm SHA256).Hash
-Set-Content -LiteralPath $ShaFile -Value "$Hash  $(Split-Path -Leaf $Zip)" -Encoding ASCII
+[System.IO.File]::WriteAllText(
+    $ShaFile,
+    "$Hash  $(Split-Path -Leaf $Zip)",
+    [System.Text.Encoding]::ASCII
+)
 
 [pscustomobject]@{
     ok = $true

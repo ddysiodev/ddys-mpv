@@ -1,20 +1,31 @@
 # ddys-mpv
 
-`ddys-mpv` 是低端影视 API 的 mpv Lua 播放器脚本。安装后可以在 mpv 里直接浏览 DDYS 分类、搜索影片、查看资源线路并播放 m3u8/mp4/mpd 等链接。
+`ddys-mpv` 是低端影视 API 的 mpv Lua 播放器脚本。安装后可以在 mpv 里浏览 DDYS 分类、搜索影片、查看资源线路，并播放 m3u8、mp4、mpd 等直链资源。
 
 ## 功能
 
 - 首页菜单：最新更新、热门内容、电影、剧集、动漫、综艺、纪录片
 - 搜索：通过 mpv console 输入关键词
 - 详情页：拉取 DDYS 资源线路并按偏好排序
-- 播放：`loadfile` 直接播放 URL
+- 播放：通过 mpv `loadfile` 直接播放 URL
 - 线路：自动优先直链和高质量关键词
-- 外部资源：可显示网盘、磁力、页面资源
+- 外部资源：显示网盘、磁力、页面等资源
 - 收藏/稍后看：本地 JSON 文件
 - 播放历史：本地 JSON 文件
 - 导出播放列表：M3U、PLS
 - 配置：API Base、API Key、分页、菜单行数、快捷键、直链策略
 - 安装脚本：Windows、macOS、Linux
+
+## Release
+
+GitHub Release 提供：
+
+```text
+ddys-mpv-v0.1.1.zip
+ddys-mpv-v0.1.1.zip.sha256
+```
+
+ZIP 中包含脚本、默认配置、示例配置、安装/卸载脚本、文档、测试和自检工具，不包含 `node_modules`、构建产物、本地环境文件或缓存。
 
 ## 安装
 
@@ -52,13 +63,13 @@ Ctrl+f  收藏/稍后看
 菜单打开后：
 
 ```text
-↑/↓       选择
-Enter    打开/播放
+Up/Down   选择
+Enter     打开/播放
 Backspace 返回首页
-Esc      关闭菜单
+Esc       关闭菜单
 ```
 
-搜索会打开 mpv console，输入关键词后回车即可。也可以手动执行：
+也可以手动执行：
 
 ```text
 script-message ddys-mpv-search 关键词
@@ -81,24 +92,15 @@ direct_only=no
 auto_play_best=no
 ```
 
-如果你部署了自己的 DDYS API 代理，把 `api_base` 改成代理地址即可。
+脚本通过 `curl` 请求 DDYS API。Windows 10/11、macOS 和多数 Linux 发行版通常已内置 curl；如果没有，请安装 curl 或把 `http_command` 改成兼容 curl 参数的命令。
 
-## 数据文件
+## 本地检查
 
-默认写入 mpv 配置目录：
-
-```text
-ddys-mpv-history.json
-ddys-mpv-favorites.json
-<slug>.m3u
-<slug>.pls
+```bash
+node tools/check.mjs
+node tests/run.mjs
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-package.ps1
 ```
-
-也可以用 `data_dir` 指定目录。指定目录需要提前存在。
-
-## 依赖
-
-脚本通过 `curl` 请求 DDYS API。Windows 10/11、macOS 和多数 Linux 发行版通常已内置 curl；如果没有，请安装 curl 或把 `http_command` 改成可兼容 curl 参数的命令。
 
 ## 卸载
 
